@@ -1,0 +1,77 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-ph-bg: var(--theme-bg);
+  --color-ph-surface: var(--theme-surface);
+  --color-ph-dark: var(--theme-dark);
+  --color-ph-red: var(--theme-red);
+  --color-ph-blue: var(--theme-blue);
+  --color-ph-yellow: var(--theme-yellow);
+  --color-ph-green: var(--theme-green);
+}
+
+:root {
+  --theme-bg: #f4f4f0;
+  --theme-surface: #ffffff;
+  --theme-dark: #1d1d1d;
+  --theme-red: #f54e00;
+  --theme-blue: #1d4aff;
+  --theme-yellow: #ffc025;
+  --theme-green: #00d084;
+}
+
+.dark {
+  --theme-bg: #1a1a1a;
+  --theme-surface: #282828;
+  --theme-dark: #e5e5e5;
+  --theme-red: #ff783e;
+  --theme-blue: #5c7cff;
+  --theme-yellow: #ffd670;
+  --theme-green: #36e5a8;
+}
+
+body {
+  background-color: var(--color-ph-bg);
+  color: var(--color-ph-dark);
+  font-family: var(--font-sans);
+}
+
+.brutal-border {
+  border: 3px solid var(--color-ph-dark);
+}
+
+.brutal-shadow {
+  box-shadow: 6px 6px 0px var(--color-ph-dark);
+}
+
+.brutal-shadow-sm {
+  box-shadow: 3px 3px 0px var(--color-ph-dark);
+}
+
+.brutal-button {
+  border: 3px solid var(--color-ph-dark);
+  box-shadow: 6px 6px 0px var(--color-ph-dark);
+  transition: all 0.1s ease;
+}
+
+.brutal-button:active:not(:disabled) {
+  transform: translate(3px, 3px);
+  box-shadow: 3px 3px 0px var(--color-ph-dark);
+}
+
+.brutal-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 6px 6px 0px var(--color-ph-dark);
+}
+
+.brutal-card {
+  background-color: var(--color-ph-surface);
+  border: 3px solid var(--color-ph-dark);
+  box-shadow: 8px 8px 0px var(--color-ph-dark);
+}
