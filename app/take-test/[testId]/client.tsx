@@ -104,8 +104,15 @@ export function TakeTestClient({ testId, token }: { testId: string; token: strin
 
         if (res.status === 410) {
           const data = await res.json();
-          setExistingScore(data.score);
-          setPhase('already_done');
+          if (data.result && data.test && data.questions) {
+            setResult(data.result);
+            setTestInfo(data.test);
+            setQuestions(data.questions);
+            setPhase('results');
+          } else {
+            setExistingScore(data.score);
+            setPhase('already_done');
+          }
           return;
         }
 

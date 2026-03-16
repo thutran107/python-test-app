@@ -70,10 +70,38 @@ export async function GET(
   }
 
   if (assignment.status === 'completed' || assignment.status === 'timed_out') {
+    // Fetch the attempt and test info so the client can show full results
+    const { data: attempt } = await db
+      .from('test_attempts')
+      .select('total_questions, correct_answers, score_percentage, passed, answers')
+      .eq('assignment_id', assignment.id)
+      .single();
+
+    const { data: test } = await db
+      .from('tests')
+      .select('name, questions_json, pass_threshold')
+      .eq('id', testId)
+      .single();
+
+    const result = attempt ? {
+      total_questions: attempt.total_questions,
+      correct_answers: attempt.correct_answers,
+      score_percentage: attempt.score_percentage,
+      passed: attempt.passed,
+      graded_answers: attempt.answers,
+    } : null;
+
     return NextResponse.json({
       error: 'Test already completed',
       status: assignment.status,
       score: assignment.score,
+      result,
+      test: test ? {
+        id: testId,
+        name: test.name,
+        pass_threshold: test.pass_threshold,
+      } : null,
+      questions: test ? sanitizeQuestions(test.questions_json as BankQuestion[]) : [],
     }, { status: 410 });
   }
 
