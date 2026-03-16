@@ -98,6 +98,39 @@ supabase/
 | `npm run start` | Start production server |
 | `npm run lint` | Run ESLint |
 
+## Runbook
+
+### Quick start
+
+```bash
+# 1. Copy the env template and fill in your values
+cp .env.template .env.local
+
+# 2. Build and run
+docker compose up --build -d
+
+# 3. Verify
+curl http://localhost:3000/api/health
+# → {"status":"ok","timestamp":"..."}
+```
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `docker compose up --build -d` | Build image and start in background |
+| `docker compose logs -f app` | Tail application logs |
+| `docker compose down` | Stop and remove containers |
+| `docker compose up -d --build` | Rebuild after code changes |
+
+### Health check
+
+The container has a built-in health check hitting `GET /api/health` every 30 seconds. Check status with:
+
+```bash
+docker compose ps
+```
+
 ## License
 
 Private — not licensed for redistribution.
