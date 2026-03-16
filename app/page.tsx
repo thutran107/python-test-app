@@ -37,17 +37,38 @@ interface MockTest {
   status?: 'draft' | 'published';
 }
 
-const MOCK_TESTS: MockTest[] = [
-  { id: 'baseline', name: 'Python Fundamentals', topics: [...ALL_TOPICS], duration: '30 min', questions: 20, proctoring_enabled: false },
-];
-
 export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('admin');
   const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
   const [takerTab, setTakerTab] = useState<TakerTab>('list');
   const [selectedTest, setSelectedTest] = useState<MockTest | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [tests, setTests] = useState<MockTest[]>(MOCK_TESTS);
+  const [tests, setTests] = useState<MockTest[]>([]);
+
+  // Fetch saved tests from Supabase on mount
+  useEffect(() => {
+    async function fetchTests() {
+      try {
+        const res = await fetch('/api/tests');
+        if (!res.ok) return;
+        const data = await res.json();
+        const loaded: MockTest[] = (data || []).map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          topics: t.config_json?.topics || [],
+          duration: `${t.duration_minutes} min`,
+          questions: t.total_questions,
+          proctoring_enabled: t.config_json?.proctoring_enabled || false,
+          supabaseId: t.id,
+          status: t.status || 'published',
+        }));
+        setTests(loaded);
+      } catch (err) {
+        console.error('Failed to fetch tests:', err);
+      }
+    }
+    fetchTests();
+  }, []);
 
   useEffect(() => {
     if (isDarkMode) {
