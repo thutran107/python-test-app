@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Settings, User, Plus, LayoutDashboard, CheckSquare, Code, Play, ArrowRight, ArrowLeft, Check, BookOpen, Clock, Moon, Sun, Shield, ShieldOff, AlertTriangle, Terminal, ChevronDown, ChevronRight, Info, Search, Database, ListChecks, Shuffle, X, Eye, RefreshCw, Link, BarChart3, Download, Copy, ExternalLink, Mail, Printer } from 'lucide-react';
+import { Settings, User, Plus, LayoutDashboard, CheckSquare, Code, Play, ArrowRight, ArrowLeft, Check, BookOpen, Clock, Moon, Sun, Shield, ShieldOff, AlertTriangle, Terminal, ChevronDown, ChevronRight, Info, Search, Database, ListChecks, Shuffle, X, Eye, RefreshCw, Link, BarChart3, Download, Copy, ExternalLink, Mail, Printer, Trash2 } from 'lucide-react';
 import { PracticeView } from '@/app/practice-view';
 import {
   getAllQuestions,
@@ -107,6 +107,11 @@ export default function App() {
     setAdminTab('dashboard');
   };
 
+  const handleTestDeleted = (testId: string) => {
+    setTests(prev => prev.filter(t => t.supabaseId !== testId && t.id !== testId));
+    setSelectedTest(null);
+  };
+
   return (
     <div className="min-h-screen p-4 md:p-8 max-w-6xl mx-auto transition-colors duration-200">
       {/* Header */}
@@ -158,7 +163,7 @@ export default function App() {
 
       <main>
         {viewMode === 'admin' && (
-          <AdminView tab={adminTab} setTab={setAdminTab} tests={tests} onTestCreated={handleTestCreated} />
+          <AdminView tab={adminTab} setTab={setAdminTab} tests={tests} onTestCreated={handleTestCreated} onTestDeleted={handleTestDeleted} />
         )}
         {viewMode === 'taker' && (
           <TakerView tab={takerTab} setTab={setTakerTab} selectedTest={selectedTest} setSelectedTest={setSelectedTest} tests={tests} />
@@ -171,7 +176,7 @@ export default function App() {
   );
 }
 
-function AdminView({ tab, setTab, tests, onTestCreated }: { tab: AdminTab; setTab: (t: AdminTab) => void; tests: MockTest[]; onTestCreated: (t: MockTest) => void }) {
+function AdminView({ tab, setTab, tests, onTestCreated, onTestDeleted }: { tab: AdminTab; setTab: (t: AdminTab) => void; tests: MockTest[]; onTestCreated: (t: MockTest) => void; onTestDeleted: (testId: string) => void }) {
   return (
     <div className="flex flex-col md:flex-row gap-8">
       <div className="w-full md:w-64 flex flex-col gap-4">
@@ -206,7 +211,7 @@ function AdminView({ tab, setTab, tests, onTestCreated }: { tab: AdminTab; setTa
       </div>
 
       <div className="flex-1">
-        {tab === 'dashboard' && <AdminDashboard setTab={setTab} tests={tests} />}
+        {tab === 'dashboard' && <AdminDashboard setTab={setTab} tests={tests} onTestDeleted={onTestDeleted} />}
         {tab === 'bank' && <QuestionBankBrowser />}
         {tab === 'create' && <AdminCreateTest setTab={setTab} onTestCreated={onTestCreated} />}
         {tab === 'results' && <AdminResultsDashboard tests={tests} />}
@@ -215,7 +220,7 @@ function AdminView({ tab, setTab, tests, onTestCreated }: { tab: AdminTab; setTa
   );
 }
 
-function AdminDashboard({ setTab, tests }: { setTab: (t: AdminTab) => void; tests: MockTest[] }) {
+function AdminDashboard({ setTab, tests, onTestDeleted }: { setTab: (t: AdminTab) => void; tests: MockTest[]; onTestDeleted: (testId: string) => void }) {
   const [selectedTest, setSelectedTest] = useState<MockTest | null>(null);
 
   if (selectedTest) {
@@ -269,7 +274,7 @@ function AdminDashboard({ setTab, tests }: { setTab: (t: AdminTab) => void; test
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4">
         {tests.map((test) => (
-          <TestDashboardCard key={test.id} test={test} onSelect={() => setSelectedTest(test)} />
+          <TestDashboardCard key={test.id} test={test} onSelect={() => setSelectedTest(test)} onDelete={onTestDeleted} />
         ))}
       </div>
     </div>
@@ -1679,33 +1684,145 @@ function CodingQuestionView({ question, index, code, onChange, pyStatus, runCode
 
 // ─── Test Dashboard Card with Magic Link ─────────────────────────────────────
 
-function TestDashboardCard({ test, onSelect }: { test: MockTest; onSelect: () => void }) {
+function TestDashboardCard({ test, onSelect, onDelete }: { test: MockTest; onSelect: () => void; onDelete: (testId: string) => void }) {
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
   return (
-    <div
-      className="brutal-card p-6 flex flex-col gap-4 cursor-pointer hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
-      onClick={onSelect}
-    >
-      <div className="flex justify-between items-start">
-        <h3 className="text-2xl font-bold">{test.name}</h3>
-        <div className="flex items-center gap-2">
-          {test.supabaseId && (
-            <span className="bg-ph-green text-black font-mono text-xs px-2 py-1 brutal-border">PUBLISHED</span>
-          )}
-          <span className="bg-ph-dark text-ph-surface font-mono text-xs px-2 py-1 brutal-border">
-            ID: #{test.supabaseId ? test.supabaseId.slice(0, 8) : test.id}
-          </span>
+    <>
+      <div
+        className="brutal-card p-6 flex flex-col gap-4 cursor-pointer hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
+        onClick={onSelect}
+      >
+        <div className="flex justify-between items-start">
+          <h3 className="text-2xl font-bold">{test.name}</h3>
+          <div className="flex items-center gap-2">
+            {test.supabaseId && (
+              <span className="bg-ph-green text-black font-mono text-xs px-2 py-1 brutal-border">PUBLISHED</span>
+            )}
+            <span className="bg-ph-dark text-ph-surface font-mono text-xs px-2 py-1 brutal-border">
+              ID: #{test.supabaseId ? test.supabaseId.slice(0, 8) : test.id}
+            </span>
+            {test.supabaseId && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowDeleteModal(true); }}
+                className="brutal-button bg-ph-surface px-2 py-1 hover:bg-ph-red hover:text-white transition-colors"
+                title="Delete test"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {test.topics.map(topic => (
+            <span key={topic} className="bg-ph-dark/5 brutal-border px-3 py-1 text-sm font-bold">
+              {topic}
+            </span>
+          ))}
+        </div>
+        <div className="flex gap-6 mt-4 pt-4 border-t-2 border-ph-dark font-mono text-sm font-bold">
+          <div className="flex items-center gap-2"><Clock className="w-4 h-4" /> {test.duration}</div>
+          <div className="flex items-center gap-2"><CheckSquare className="w-4 h-4" /> {test.questions} Qs</div>
         </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {test.topics.map(topic => (
-          <span key={topic} className="bg-ph-dark/5 brutal-border px-3 py-1 text-sm font-bold">
-            {topic}
-          </span>
-        ))}
-      </div>
-      <div className="flex gap-6 mt-4 pt-4 border-t-2 border-ph-dark font-mono text-sm font-bold">
-        <div className="flex items-center gap-2"><Clock className="w-4 h-4" /> {test.duration}</div>
-        <div className="flex items-center gap-2"><CheckSquare className="w-4 h-4" /> {test.questions} Qs</div>
+
+      {showDeleteModal && test.supabaseId && (
+        <DeleteTestModal
+          testId={test.supabaseId}
+          testName={test.name}
+          onClose={() => setShowDeleteModal(false)}
+          onDeleted={() => onDelete(test.supabaseId!)}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── Delete Test Confirmation Modal ──────────────────────────────────────────
+
+function DeleteTestModal({ testId, testName, onClose, onDeleted }: { testId: string; testName: string; onClose: () => void; onDeleted: () => void }) {
+  const [assignmentCount, setAssignmentCount] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    async function fetchAssignments() {
+      try {
+        const res = await fetch(`/api/tests/${testId}/assignments`);
+        if (res.ok) {
+          const data = await res.json();
+          setAssignmentCount(data.length);
+        } else {
+          setAssignmentCount(0);
+        }
+      } catch {
+        setAssignmentCount(0);
+      }
+      setLoading(false);
+    }
+    fetchAssignments();
+  }, [testId]);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/tests/${testId}`, { method: 'DELETE' });
+      if (res.ok) {
+        onDeleted();
+        onClose();
+      } else {
+        console.error('Failed to delete test');
+        setDeleting(false);
+      }
+    } catch (err) {
+      console.error('Failed to delete test:', err);
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-start justify-center p-4 pt-8 overflow-y-auto" onClick={onClose}>
+      <div className="brutal-card bg-ph-surface w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 border-b-4 border-ph-dark flex items-center justify-between">
+          <h3 className="text-2xl font-bold uppercase">Delete Test</h3>
+          <button onClick={onClose} className="brutal-button bg-ph-surface px-3 py-2">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {loading ? (
+            <p className="font-mono text-sm font-bold opacity-60">Checking assignments...</p>
+          ) : (
+            <>
+              {assignmentCount && assignmentCount > 0 ? (
+                <div className="brutal-border bg-ph-red/10 p-4 flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-ph-red flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-sm">This test has been sent to {assignmentCount} taker{assignmentCount !== 1 ? 's' : ''}.</p>
+                    <p className="font-mono text-xs mt-1 opacity-70">Deleting it will remove all assignments and submission data.</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="font-bold text-sm">Are you sure you want to delete &ldquo;{testName}&rdquo;?</p>
+              )}
+              <p className="font-mono text-xs opacity-60">This action cannot be undone.</p>
+            </>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={onClose} className="brutal-button bg-ph-surface px-6 py-2 font-bold">
+              CANCEL
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={loading || deleting}
+              className="brutal-button bg-ph-red text-white px-6 py-2 font-bold disabled:opacity-50"
+            >
+              {deleting ? 'DELETING...' : 'DELETE'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -2072,6 +2189,8 @@ interface StatsData {
   median_score: number;
   pass_rate: number;
   average_time_secs: number;
+  avg_correct: number;
+  avg_total: number;
   per_question_accuracy: Record<string, number>;
 }
 
@@ -2163,6 +2282,7 @@ function AdminResultsDashboard({ tests }: { tests: MockTest[] }) {
                   <div className="brutal-card p-4 text-center bg-ph-surface">
                     <div className="text-3xl font-bold text-ph-blue">{stats.average_score}%</div>
                     <div className="font-mono text-xs font-bold opacity-60">AVG SCORE</div>
+                    <div className="font-mono text-xs opacity-50 mt-1">{stats.avg_correct} / {stats.avg_total} pts</div>
                   </div>
                   <div className="brutal-card p-4 text-center bg-ph-surface">
                     <div className="text-3xl font-bold text-ph-green">{stats.pass_rate}%</div>
@@ -2201,7 +2321,10 @@ function AdminResultsDashboard({ tests }: { tests: MockTest[] }) {
                         <tr key={a.id} className="border-b-2 border-ph-dark hover:bg-ph-dark/5 transition-colors">
                           <td className="p-4 font-bold">{a.recipients?.name || 'Unknown'}</td>
                           <td className="p-4 font-mono text-sm">{a.recipients?.email || '—'}</td>
-                          <td className="p-4 text-center font-bold text-lg">{a.score_percentage}%</td>
+                          <td className="p-4 text-center">
+                            <div className="font-bold text-lg">{a.correct_answers} / {a.total_questions}</div>
+                            <div className="font-mono text-xs opacity-60">{a.score_percentage}%</div>
+                          </td>
                           <td className="p-4 text-center">
                             <span className={`px-3 py-1 brutal-border font-bold text-xs ${a.passed ? 'bg-ph-green text-black' : 'bg-ph-red text-white'}`}>
                               {a.passed ? 'PASSED' : 'FAILED'}
@@ -2329,7 +2452,10 @@ function ResultDetailModal({
               <p className="font-mono text-sm opacity-70">{attempt.recipients?.email || '—'}</p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="text-4xl font-bold">{attempt.score_percentage}%</div>
+              <div className="text-right">
+                <div className="text-4xl font-bold">{attempt.correct_answers} / {attempt.total_questions}</div>
+                <div className="font-mono text-sm opacity-60">{attempt.score_percentage}%</div>
+              </div>
               <span className={`px-3 py-1 brutal-border font-bold text-sm ${attempt.passed ? 'bg-ph-green text-black' : 'bg-ph-red text-white'}`}>
                 {attempt.passed ? 'PASSED' : 'FAILED'}
               </span>
@@ -2342,7 +2468,6 @@ function ResultDetailModal({
             </div>
           </div>
           <div className="flex gap-6 mt-3 font-mono text-sm font-bold opacity-70">
-            <span>{attempt.correct_answers}/{attempt.total_questions} correct</span>
             {attempt.time_spent_secs && <span><Clock className="w-3 h-3 inline" /> {Math.round(attempt.time_spent_secs / 60)}m</span>}
             {attempt.completed_at && <span>{new Date(attempt.completed_at).toLocaleDateString()}</span>}
           </div>

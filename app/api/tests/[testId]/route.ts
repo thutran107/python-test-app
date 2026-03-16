@@ -45,8 +45,25 @@ export async function DELETE(
 ) {
   const { testId } = await params;
   const db = supabaseAdmin();
-  const { error } = await db.from('tests').delete().eq('id', testId);
 
+  // Cascade delete: remove child rows first
+  const { error: attemptsError } = await db
+    .from('test_attempts')
+    .delete()
+    .eq('test_id', testId);
+  if (attemptsError) {
+    return NextResponse.json({ error: attemptsError.message }, { status: 500 });
+  }
+
+  const { error: assignmentsError } = await db
+    .from('recipient_test_assignments')
+    .delete()
+    .eq('test_id', testId);
+  if (assignmentsError) {
+    return NextResponse.json({ error: assignmentsError.message }, { status: 500 });
+  }
+
+  const { error } = await db.from('tests').delete().eq('id', testId);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

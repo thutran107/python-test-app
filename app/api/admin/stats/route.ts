@@ -36,6 +36,8 @@ export async function GET(req: NextRequest) {
       median_score: 0,
       pass_rate: 0,
       average_time_secs: 0,
+      avg_correct: 0,
+      avg_total: 0,
       per_question_accuracy: {},
     });
   }
@@ -47,6 +49,8 @@ export async function GET(req: NextRequest) {
     : scores[Math.floor(scores.length / 2)];
   const passCount = attempts.filter(a => a.passed).length;
   const avgTime = attempts.reduce((s, a) => s + (a.time_spent_secs || 0), 0) / attempts.length;
+  const avgCorrect = attempts.reduce((s, a) => s + (a.correct_answers || 0), 0) / attempts.length;
+  const avgTotal = attempts.reduce((s, a) => s + (a.total_questions || 0), 0) / attempts.length;
 
   // Per-question accuracy
   const questionStats: Record<string, { correct: number; total: number }> = {};
@@ -76,6 +80,8 @@ export async function GET(req: NextRequest) {
     median_score: Math.round(median * 100) / 100,
     pass_rate: Math.round((passCount / attempts.length) * 100),
     average_time_secs: Math.round(avgTime),
+    avg_correct: Math.round(avgCorrect * 10) / 10,
+    avg_total: Math.round(avgTotal * 10) / 10,
     per_question_accuracy: perQuestionAccuracy,
   });
 }
