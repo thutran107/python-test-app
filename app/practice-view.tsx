@@ -1,17 +1,32 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { PenLine, FileCode, Bug, Eye, Lightbulb, Play, ChevronRight } from 'lucide-react';
 import {
-  PRACTICE_EXERCISES,
-  EXERCISE_TYPE_LABELS,
-  LEVEL_DEFINITIONS,
-  type ExerciseType,
-  type DifficultyLevel,
+  getAllQuestions,
+  ALL_TOPICS,
+  type CodingQuestion,
+  type Topic,
   type TestCase,
-} from '@/lib/practice-exercises';
+} from '@/lib/question-bank';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+type ExerciseType = 'fill_blank' | 'write_from_scratch' | 'fix_bug' | 'predict_output';
+type DifficultyLevel = 'easy' | 'medium' | 'hard';
+
+interface Exercise {
+  id: string;
+  type: ExerciseType;
+  title: string;
+  topic: string;
+  difficulty: DifficultyLevel;
+  description: string;
+  starter_code: string;
+  solution_code: string;
+  hint: string;
+  test_cases: TestCase[];
+}
 
 interface RunResult {
   stdout: string;
@@ -24,6 +39,57 @@ interface TestResult {
   passed: boolean;
   actual_output: string;
   error: string | null;
+}
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const EXERCISE_TYPE_LABELS: Record<ExerciseType, string> = {
+  fill_blank: 'Fill in the Blank',
+  write_from_scratch: 'Write from Scratch',
+  fix_bug: 'Fix the Bug',
+  predict_output: 'Predict the Output',
+};
+
+const LEVEL_DEFINITIONS = {
+  easy: {
+    label: 'Easy',
+    tagline: 'Single concept, guided structure',
+    color: 'bg-ph-green text-black',
+    goal: 'Build familiarity with Python syntax. One idea per exercise. No surprising edge cases.',
+  },
+  medium: {
+    label: 'Medium',
+    tagline: 'Multi-step logic, familiar patterns',
+    color: 'bg-ph-yellow text-black',
+    goal: 'Apply Python tools to solve small problems. Learner writes meaningful logic.',
+  },
+  hard: {
+    label: 'Hard',
+    tagline: 'Algorithm thinking, edge cases, composition',
+    color: 'bg-ph-red text-white',
+    goal: 'Solve problems that require combining multiple Python concepts. Edge cases matter.',
+  },
+} as const;
+
+const DIFFICULTY_MAP: Record<string, DifficultyLevel> = {
+  beginner: 'easy',
+  intermediate: 'medium',
+  advanced: 'hard',
+};
+
+function mapCodingToExercise(q: CodingQuestion): Exercise {
+  return {
+    id: q.id,
+    type: q.exercise_type,
+    title: q.title,
+    topic: q.topic,
+    difficulty: DIFFICULTY_MAP[q.difficulty],
+    description: q.description,
+    starter_code: q.starter_code,
+    solution_code: q.solution_code,
+    hint: q.hints[0] ?? '',
+    test_cases: q.test_cases,
+  };
 }
 
 // ─── Pyodide ─────────────────────────────────────────────────────────────────
@@ -107,7 +173,7 @@ function usePyodide() {
   return { status, errorMessage, runCode };
 }
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// ─── UI Constants ────────────────────────────────────────────────────────────
 
 const TYPE_ICON: Record<ExerciseType, React.ReactNode> = {
   fill_blank: <PenLine className="w-3.5 h-3.5" />,
@@ -140,13 +206,20 @@ const LEVELS: DifficultyLevel[] = ['easy', 'medium', 'hard'];
 export function PracticeView() {
   const { status, errorMessage, runCode } = usePyodide();
 
+  const exercises = useMemo(() => {
+    return getAllQuestions()
+      .filter((q): q is CodingQuestion => q.type === 'coding')
+      .map(mapCodingToExercise);
+  }, []);
+
   const [activeLevel, setActiveLevel] = useState<DifficultyLevel>('easy');
   const [typeFilter, setTypeFilter] = useState<ExerciseType | 'all'>('all');
+  const [topicFilter, setTopicFilter] = useState<Topic | 'all'>('all');
 
-  const byLevel = PRACTICE_EXERCISES.filter(e => e.difficulty === activeLevel);
+  const byLevel = exercises.filter(e => e.difficulty === activeLevel);
   const firstInLevel = byLevel[0];
 
-  const [activeId, setActiveId] = useState(firstInLevel?.id ?? PRACTICE_EXERCISES[0].id);
+  const [activeId, setActiveId] = useState(firstInLevel?.id ?? exercises[0]?.id ?? '');
   const [userCode, setUserCode] = useState(firstInLevel?.starter_code ?? '');
   const [userAnswer, setUserAnswer] = useState('');
   const [isRunning, setIsRunning] = useState(false);
@@ -155,9 +228,10 @@ export function PracticeView() {
   const [showHint, setShowHint] = useState(false);
 
   const handleLevelChange = (level: DifficultyLevel) => {
-    const inLevel = PRACTICE_EXERCISES.filter(e => e.difficulty === level);
+    const inLevel = exercises.filter(e => e.difficulty === level);
     setActiveLevel(level);
     setTypeFilter('all');
+    setTopicFilter('all');
     setActiveId(inLevel[0]?.id ?? '');
     setUserCode(inLevel[0]?.starter_code ?? '');
     setUserAnswer('');
@@ -166,10 +240,11 @@ export function PracticeView() {
     setShowHint(false);
   };
 
-  const exercise = PRACTICE_EXERCISES.find(e => e.id === activeId);
-  const filtered = typeFilter === 'all'
-    ? byLevel
-    : byLevel.filter(e => e.type === typeFilter);
+  const exercise = exercises.find(e => e.id === activeId);
+  const filtered = byLevel.filter(e =>
+    (typeFilter === 'all' || e.type === typeFilter) &&
+    (topicFilter === 'all' || e.topic === topicFilter)
+  );
 
   // Reset state when exercise changes
   useEffect(() => {
@@ -230,7 +305,7 @@ export function PracticeView() {
         <div className="flex gap-2 flex-wrap">
           {LEVELS.map(level => {
             const def = LEVEL_DEFINITIONS[level];
-            const count = PRACTICE_EXERCISES.filter(e => e.difficulty === level).length;
+            const count = exercises.filter(e => e.difficulty === level).length;
             const isActive = activeLevel === level;
             return (
               <button
@@ -269,6 +344,29 @@ export function PracticeView() {
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar */}
         <div className="w-full lg:w-64 shrink-0 space-y-3">
+          {/* Topic filter */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setTopicFilter('all')}
+              className={`px-3 py-1 font-mono text-xs font-bold brutal-border transition-colors ${
+                topicFilter === 'all' ? 'bg-ph-dark text-ph-surface' : 'bg-ph-surface hover:bg-ph-dark/5'
+              }`}
+            >
+              ALL TOPICS
+            </button>
+            {ALL_TOPICS.map(t => (
+              <button
+                key={t}
+                onClick={() => setTopicFilter(t)}
+                className={`px-3 py-1 font-mono text-xs font-bold brutal-border transition-colors ${
+                  topicFilter === t ? 'bg-ph-dark text-ph-surface' : 'bg-ph-surface hover:bg-ph-dark/5'
+                }`}
+              >
+                {t.toUpperCase()}
+              </button>
+            ))}
+          </div>
+
           {/* Type filter */}
           <div className="flex flex-wrap gap-2">
             {TYPE_FILTERS.map(f => (

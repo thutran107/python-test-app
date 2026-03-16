@@ -75,3 +75,21 @@ body {
   border: 3px solid var(--color-ph-dark);
   box-shadow: 8px 8px 0px var(--color-ph-dark);
 }
+
+@media print {
+  body > * {
+    visibility: hidden;
+  }
+  #result-detail-modal,
+  #result-detail-modal * {
+    visibility: visible;
+  }
+  #result-detail-modal {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    box-shadow: none;
+    border: none;
+  }
+}

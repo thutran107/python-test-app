@@ -6,17 +6,19 @@ This file defines conventions and preferences for Claude Code when working on th
 
 ## Project Overview
 
-PyTest is a beginner Python assessment platform. Admins generate multiple-choice tests via an n8n webhook, learners take them through a clean UI, and admins review results on a dashboard. See `pytest_prd.md` for full requirements.
+PyTest is a Python learner assessment and practice platform. Admins create tests from a curated question bank (MC, open answer, coding), generate magic invite links, and review results. Learners take timed assessments with real Python execution (Pyodide) and get instant graded results with topic-level feedback. See `PRD.md` for full requirements.
 
 ---
 
 ## Tech Stack
 
-- **Framework:** Next.js 14 (App Router)
-- **Styling:** Tailwind CSS + shadcn/ui
-- **Auth & Database:** Supabase (Auth, PostgreSQL, RLS)
-- **Hosting:** Vercel
-- **Test Generation:** n8n webhook integration
+- **Framework:** Next.js 15 (App Router)
+- **UI:** React 19
+- **Styling:** Tailwind CSS 4 (brutalist design system — `brutal-card`, `brutal-border`, `brutal-button`, `brutal-shadow`)
+- **Icons:** Lucide React
+- **Auth & Database:** Supabase (Auth with Google OAuth, PostgreSQL, RLS)
+- **Python Execution:** Pyodide (client-side WebAssembly)
+- **Hosting:** Dokploy (self-hosted)
 
 ---
 
@@ -25,62 +27,49 @@ PyTest is a beginner Python assessment platform. Admins generate multiple-choice
 - Use **TypeScript** throughout — no plain `.js` files
 - Prefer `async/await` over `.then()` chains
 - Use named exports for components, default exports only for Next.js pages/routes
-- Keep components small and single-purpose — split into smaller files if a component exceeds ~150 lines
 - No inline styles — use Tailwind utility classes only
-- Avoid `any` types; define proper interfaces and types in `/types`
+- Avoid `any` types; define proper interfaces and types
 
 ---
 
 ## Folder Structure
 
 ```
-/app                    → Next.js App Router pages & layouts
-  /admin                → Admin-only routes
-  /dashboard            → Learner dashboard
-  /test/[id]            → Test-taking flow
-  /api                  → API route handlers (including /api/receive-test)
-/components
-  /ui                   → shadcn/ui primitives (auto-generated, don't edit)
-  /shared               → Reusable app components (buttons, badges, modals)
-  /learner              → Learner-specific components
-  /admin                → Admin-specific components
+/app                        → Next.js App Router pages & layouts
+  page.tsx                  → Main portal (admin dashboard, taker view, practice mode)
+  practice-view.tsx         → Practice mode component
+  /take-test/[testId]/      → Test-taking flow (server + client components)
+  /api/                     → API route handlers
+    /tests/                 → Test CRUD + assignments + link generation
+    /take-test/[testId]/    → Token validation, test submission, grading
+    /admin/                 → Results, stats, CSV export
 /lib
-  /supabase.ts          → Supabase client (browser + server)
-  /utils.ts             → Shared utility functions
-/types
-  /index.ts             → Shared TypeScript interfaces (Test, Question, Session, etc.)
-/hooks                  → Custom React hooks
+  /supabase.ts              → Supabase clients (browser + admin)
+  /grading.ts               → Test grading logic
+  /hooks/use-pyodide.ts     → Pyodide lifecycle hook
+  /question-bank/           → Question bank: types, questions, test builder, utils
+/supabase
+  /migrations/              → SQL migration files
 ```
 
 ---
 
 ## Supabase Conventions
 
-- Always use the **server-side Supabase client** for API routes and server components
-- Use the **browser client** only in client components that need real-time or user-triggered actions
-- Never expose the `service_role` key on the client side
+- Always use the **supabaseAdmin** client (service role) for API routes
+- Use the **supabaseBrowser** client only in client components for auth
+- Never expose the `SUPABASE_SERVICE_ROLE_KEY` on the client side
 - Always handle Supabase errors explicitly — don't silently swallow them
-- RLS is enabled on all tables — do not bypass it with the service role client except in `/api` route handlers where necessary
-
----
-
-## Component Conventions
-
-- Use **shadcn/ui** components as the base (Button, Card, Badge, Table, Dialog, etc.)
-- Add new shadcn components with: `npx shadcn-ui@latest add <component>`
-- Do not modify files inside `/components/ui` — extend them in `/components/shared` instead
-- All forms use **react-hook-form** + **zod** for validation
-- Charts use **recharts** (already a shadcn/ui dependency)
+- RLS is enabled on all tables
 
 ---
 
 ## Routing & Auth
 
-- Middleware (`/middleware.ts`) handles route protection — check this before adding new protected routes
-- Admin routes (`/admin/**`) require `role === 'admin'`
-- Learner routes (`/dashboard`, `/test/**`) require authenticated user with any role
-- Redirect unauthenticated users to `/login`
-- After login, redirect based on role: admins → `/admin`, learners → `/dashboard`
+- No middleware.ts — admin routes currently use service role key without per-user role checks
+- Test takers access tests via magic link tokens (`/take-test/[testId]?token=...`)
+- Optional Google OAuth enriches the taker's profile but isn't required to start a test
+- Auth is required to submit a test (recipient must exist)
 
 ---
 
@@ -88,30 +77,18 @@ PyTest is a beginner Python assessment platform. Admins generate multiple-choice
 
 - All API routes live in `/app/api/`
 - Use proper HTTP status codes — don't return `200` for errors
-- Validate all incoming payloads before touching the database
-- The n8n webhook receiver lives at `/api/receive-test` — treat this as a critical path, validate the payload shape strictly
-- Return consistent JSON shapes: `{ data, error }` pattern
+- Return consistent JSON shapes
+- Token validation for test-taking routes uses `access_token` query param
 
 ---
 
-## State Management
+## UI Conventions
 
-- Prefer **server components + server actions** over client-side data fetching where possible
-- Use `useState` / `useReducer` for local UI state only
-- For test-taking session state (current question, selected answers), use `useState` in the test page — no need for global state
-- No external state libraries (no Redux, Zustand) for MVP
-
----
-
-## UI & UX Rules
-
-- **Mobile-first** — design for small screens, enhance for desktop
-- Minimum tap target size: 44px height for all interactive elements
-- Answer option buttons (A/B/C/D) must be visually distinct and large
-- Show loading states on all async actions (use shadcn `Skeleton` or `Spinner`)
-- Show error states — never leave the user with a blank screen on failure
-- Confirm destructive actions with a Dialog modal (e.g. test submission, closing a test)
-- Use shadcn `Badge` for status labels: Draft (gray), Published (blue), Closed (slate), Pass (green), Fail (red)
+- **Brutalist design** — bold borders (2-3px), high contrast, strong typography
+- Color tokens: `ph-red`, `ph-blue`, `ph-yellow`, `ph-green`, `ph-dark`, `ph-surface`, `ph-bg`
+- Status badges: Draft (gray), Published (green), Pass (green), Fail (red)
+- Modals follow pattern: fixed overlay with `bg-black/70`, `brutal-card` container
+- Mobile responsive via Tailwind responsive classes
 
 ---
 
@@ -123,18 +100,15 @@ Store in `.env.local` (never commit this file):
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-N8N_WEBHOOK_URL=
-N8N_WEBHOOK_SECRET=
+NEXT_PUBLIC_APP_URL=           # Production URL for magic links
 ```
-
-Reference with `process.env.VARIABLE_NAME` — always validate that required env vars exist at startup.
 
 ---
 
 ## Do Not
 
-- Do not use `localStorage` or `sessionStorage` for auth — Supabase handles sessions via cookies
+- Do not use `localStorage` or `sessionStorage` for auth — Supabase handles sessions
 - Do not fetch data in client components if a server component can do it
-- Do not hardcode topic lists or question counts — these should come from config or the admin form
+- Do not hardcode topic lists — use `ALL_TOPICS` from question bank
 - Do not skip error handling on Supabase queries
 - Do not create new pages without checking if a route already exists in `/app`
