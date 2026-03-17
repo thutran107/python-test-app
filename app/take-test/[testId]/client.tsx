@@ -76,6 +76,7 @@ export function TakeTestClient({ testId, token }: { testId: string; token: strin
   // Check auth state
   useEffect(() => {
     const sb = supabaseBrowser();
+    if (!sb) return;
     sb.auth.getSession().then(({ data }) => {
       if (data.session) setAuthSession(data.session);
     });
@@ -144,6 +145,7 @@ export function TakeTestClient({ testId, token }: { testId: string; token: strin
 
   const handleSignIn = async () => {
     const sb = supabaseBrowser();
+    if (!sb) return;
     await sb.auth.signInWithOAuth({
       provider: 'google',
       options: {

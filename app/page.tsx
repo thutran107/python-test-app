@@ -54,6 +54,7 @@ export default function App() {
   // Auth state listener
   useEffect(() => {
     const sb = supabaseBrowser();
+    if (!sb) return;
     sb.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: { subscription } } = sb.auth.onAuthStateChange((_event, s) => setSession(s));
     return () => subscription.unsubscribe();
@@ -65,8 +66,9 @@ export default function App() {
       setUserIsAdmin(false);
       return;
     }
-    supabaseBrowser()
-      .from('profiles')
+    const sb = supabaseBrowser();
+    if (!sb) return;
+    sb.from('profiles')
       .select('role')
       .eq('id', session.user.id)
       .single()
@@ -74,14 +76,18 @@ export default function App() {
   }, [session?.user?.id]);
 
   const handleSignIn = async () => {
-    await supabaseBrowser().auth.signInWithOAuth({
+    const sb = supabaseBrowser();
+    if (!sb) return;
+    await sb.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.origin },
     });
   };
 
   const handleSignOut = async () => {
-    await supabaseBrowser().auth.signOut();
+    const sb = supabaseBrowser();
+    if (!sb) return;
+    await sb.auth.signOut();
     setSession(null);
     if (viewMode === 'admin') setViewMode('taker');
   };
