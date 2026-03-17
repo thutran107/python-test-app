@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Settings, User, Plus, LayoutDashboard, CheckSquare, Code, Play, ArrowRight, ArrowLeft, Check, BookOpen, Clock, Moon, Sun, Shield, ShieldOff, AlertTriangle, Terminal, ChevronDown, ChevronRight, Info, Search, Database, ListChecks, Shuffle, X, Eye, RefreshCw, Link, BarChart3, Download, Copy, ExternalLink, Mail, Printer, Trash2 } from 'lucide-react';
+import { Settings, User, Plus, LayoutDashboard, CheckSquare, Code, Play, ArrowRight, ArrowLeft, Check, BookOpen, Clock, Moon, Sun, Shield, ShieldOff, AlertTriangle, Terminal, ChevronDown, ChevronRight, Info, Search, Database, ListChecks, Shuffle, X, Eye, RefreshCw, Link, BarChart3, Download, Copy, ExternalLink, Mail, Printer, Trash2, LogIn, LogOut } from 'lucide-react';
+import { supabaseBrowser } from '@/lib/supabase';
+import type { Session } from '@supabase/supabase-js';
 import { PracticeView } from '@/app/practice-view';
 import {
   getAllQuestions,
@@ -23,6 +25,8 @@ type ViewMode = 'admin' | 'taker' | 'practice';
 type AdminTab = 'dashboard' | 'create' | 'bank' | 'results';
 type TakerTab = 'list' | 'take';
 
+type AdminFetchFn = (url: string, init?: RequestInit) => Promise<Response>;
+
 const TOPICS = ALL_TOPICS;
 
 interface MockTest {
@@ -38,12 +42,59 @@ interface MockTest {
 }
 
 export default function App() {
-  const [viewMode, setViewMode] = useState<ViewMode>('admin');
+  const [viewMode, setViewMode] = useState<ViewMode>('taker');
   const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
   const [takerTab, setTakerTab] = useState<TakerTab>('list');
   const [selectedTest, setSelectedTest] = useState<MockTest | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [tests, setTests] = useState<MockTest[]>([]);
+  const [session, setSession] = useState<Session | null>(null);
+  const [userIsAdmin, setUserIsAdmin] = useState(false);
+
+  // Auth state listener
+  useEffect(() => {
+    const sb = supabaseBrowser();
+    sb.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: { subscription } } = sb.auth.onAuthStateChange((_event, s) => setSession(s));
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Check admin role from profiles table
+  useEffect(() => {
+    if (!session?.user?.id) {
+      setUserIsAdmin(false);
+      return;
+    }
+    supabaseBrowser()
+      .from('profiles')
+      .select('role')
+      .eq('id', session.user.id)
+      .single()
+      .then(({ data }) => setUserIsAdmin(data?.role === 'admin'));
+  }, [session?.user?.id]);
+
+  const handleSignIn = async () => {
+    await supabaseBrowser().auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+  };
+
+  const handleSignOut = async () => {
+    await supabaseBrowser().auth.signOut();
+    setSession(null);
+    if (viewMode === 'admin') setViewMode('taker');
+  };
+
+  // Fetch helper that attaches auth token for admin API calls
+  const adminFetch = useCallback(async (url: string, init?: RequestInit) => {
+    const token = session?.access_token;
+    const headers: Record<string, string> = {
+      ...(init?.headers as Record<string, string> || {}),
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return fetch(url, { ...init, headers });
+  }, [session?.access_token]);
 
   // Fetch saved tests from Supabase on mount
   useEffect(() => {
@@ -82,7 +133,7 @@ export default function App() {
     // Persist to Supabase
     if (test.assembledTest) {
       try {
-        const res = await fetch('/api/tests', {
+        const res = await adminFetch('/api/tests', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -127,6 +178,28 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-4">
+          {session ? (
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-sm font-bold truncate max-w-[160px]">{session.user.email}</span>
+              {userIsAdmin && <span className="text-xs font-bold bg-ph-yellow px-2 py-0.5 brutal-border">ADMIN</span>}
+              <button
+                onClick={handleSignOut}
+                className="w-10 h-10 bg-ph-surface brutal-border brutal-shadow-sm flex items-center justify-center hover:bg-ph-dark/5 transition-colors"
+                aria-label="Sign out"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleSignIn}
+              className="px-4 py-2 bg-ph-surface brutal-border brutal-shadow-sm font-bold flex items-center gap-2 hover:bg-ph-dark/5 transition-colors"
+            >
+              <LogIn className="w-4 h-4" />
+              Sign in
+            </button>
+          )}
+
           <button
             onClick={() => setIsDarkMode(!isDarkMode)}
             className="w-10 h-10 bg-ph-surface brutal-border brutal-shadow-sm flex items-center justify-center hover:bg-ph-dark/5 transition-colors"
@@ -136,13 +209,15 @@ export default function App() {
           </button>
 
           <div className="flex p-1 bg-ph-surface brutal-border brutal-shadow-sm">
-            <button
-              onClick={() => setViewMode('admin')}
-              className={`px-6 py-2 font-bold flex items-center gap-2 transition-colors ${viewMode === 'admin' ? 'bg-ph-yellow text-black brutal-border' : 'hover:bg-ph-dark/5'}`}
-            >
-              <Settings className="w-4 h-4" />
-              ADMIN
-            </button>
+            {userIsAdmin && (
+              <button
+                onClick={() => setViewMode('admin')}
+                className={`px-6 py-2 font-bold flex items-center gap-2 transition-colors ${viewMode === 'admin' ? 'bg-ph-yellow text-black brutal-border' : 'hover:bg-ph-dark/5'}`}
+              >
+                <Settings className="w-4 h-4" />
+                ADMIN
+              </button>
+            )}
             <button
               onClick={() => setViewMode('taker')}
               className={`px-6 py-2 font-bold flex items-center gap-2 transition-colors ${viewMode === 'taker' ? 'bg-ph-green text-black brutal-border' : 'hover:bg-ph-dark/5'}`}
@@ -162,8 +237,8 @@ export default function App() {
       </header>
 
       <main>
-        {viewMode === 'admin' && (
-          <AdminView tab={adminTab} setTab={setAdminTab} tests={tests} onTestCreated={handleTestCreated} onTestDeleted={handleTestDeleted} />
+        {viewMode === 'admin' && userIsAdmin && (
+          <AdminView tab={adminTab} setTab={setAdminTab} tests={tests} onTestCreated={handleTestCreated} onTestDeleted={handleTestDeleted} adminFetch={adminFetch} />
         )}
         {viewMode === 'taker' && (
           <TakerView tab={takerTab} setTab={setTakerTab} selectedTest={selectedTest} setSelectedTest={setSelectedTest} tests={tests} />
@@ -176,7 +251,7 @@ export default function App() {
   );
 }
 
-function AdminView({ tab, setTab, tests, onTestCreated, onTestDeleted }: { tab: AdminTab; setTab: (t: AdminTab) => void; tests: MockTest[]; onTestCreated: (t: MockTest) => void; onTestDeleted: (testId: string) => void }) {
+function AdminView({ tab, setTab, tests, onTestCreated, onTestDeleted, adminFetch }: { tab: AdminTab; setTab: (t: AdminTab) => void; tests: MockTest[]; onTestCreated: (t: MockTest) => void; onTestDeleted: (testId: string) => void; adminFetch: AdminFetchFn }) {
   return (
     <div className="flex flex-col md:flex-row gap-8">
       <div className="w-full md:w-64 flex flex-col gap-4">
@@ -211,20 +286,20 @@ function AdminView({ tab, setTab, tests, onTestCreated, onTestDeleted }: { tab: 
       </div>
 
       <div className="flex-1">
-        {tab === 'dashboard' && <AdminDashboard setTab={setTab} tests={tests} onTestDeleted={onTestDeleted} />}
+        {tab === 'dashboard' && <AdminDashboard setTab={setTab} tests={tests} onTestDeleted={onTestDeleted} adminFetch={adminFetch} />}
         {tab === 'bank' && <QuestionBankBrowser />}
         {tab === 'create' && <AdminCreateTest setTab={setTab} onTestCreated={onTestCreated} />}
-        {tab === 'results' && <AdminResultsDashboard tests={tests} />}
+        {tab === 'results' && <AdminResultsDashboard tests={tests} adminFetch={adminFetch} />}
       </div>
     </div>
   );
 }
 
-function AdminDashboard({ setTab, tests, onTestDeleted }: { setTab: (t: AdminTab) => void; tests: MockTest[]; onTestDeleted: (testId: string) => void }) {
+function AdminDashboard({ setTab, tests, onTestDeleted, adminFetch }: { setTab: (t: AdminTab) => void; tests: MockTest[]; onTestDeleted: (testId: string) => void; adminFetch: AdminFetchFn }) {
   const [selectedTest, setSelectedTest] = useState<MockTest | null>(null);
 
   if (selectedTest) {
-    return <TestDetailView test={selectedTest} onBack={() => setSelectedTest(null)} />;
+    return <TestDetailView test={selectedTest} onBack={() => setSelectedTest(null)} adminFetch={adminFetch} />;
   }
 
   return (
@@ -274,7 +349,7 @@ function AdminDashboard({ setTab, tests, onTestDeleted }: { setTab: (t: AdminTab
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4">
         {tests.map((test) => (
-          <TestDashboardCard key={test.id} test={test} onSelect={() => setSelectedTest(test)} onDelete={onTestDeleted} />
+          <TestDashboardCard key={test.id} test={test} onSelect={() => setSelectedTest(test)} onDelete={onTestDeleted} adminFetch={adminFetch} />
         ))}
       </div>
     </div>
@@ -1362,16 +1437,74 @@ function ActiveTestView({ testName, questions, proctoringEnabled, duration, onEx
   }
 
   if (submitted) {
+    const gradedResults = questions.map((q) => {
+      if (q.type === 'multiple_choice') {
+        const selected = mcAnswers[q.id];
+        const correct = selected === q.correct_index;
+        return { id: q.id, type: q.type as string, body: q.body, correct, answered: selected != null };
+      } else if (q.type === 'open_answer') {
+        const answer = (openAnswers[q.id] || '').trim().toLowerCase();
+        const correct = q.acceptable_answers.some(a => a.toLowerCase() === answer);
+        return { id: q.id, type: q.type as string, body: q.body, correct, answered: answer !== '' };
+      } else {
+        // Coding questions — not auto-graded here
+        const answered = !!(codeAnswers[q.id] || '').trim();
+        return { id: q.id, type: q.type as string, body: q.title, correct: null as boolean | null, answered };
+      }
+    });
+    const gradable = gradedResults.filter(r => r.correct !== null);
+    const correctCount = gradable.filter(r => r.correct).length;
+    const totalGradable = gradable.length;
+    const percentage = totalGradable > 0 ? Math.round((correctCount / totalGradable) * 100) : 0;
+    const codingCount = gradedResults.filter(r => r.correct === null).length;
+
     return (
-      <div className="max-w-2xl mx-auto mt-16 brutal-card p-12 text-center space-y-6 bg-ph-surface">
-        <div className="w-16 h-16 bg-ph-green brutal-border brutal-shadow mx-auto flex items-center justify-center">
-          <Check className="w-10 h-10 text-black" />
+      <div className="max-w-3xl mx-auto mt-8 space-y-6">
+        <div className="brutal-card p-10 text-center space-y-6 bg-ph-surface">
+          <div className="w-16 h-16 bg-ph-green brutal-border brutal-shadow mx-auto flex items-center justify-center">
+            <Check className="w-10 h-10 text-black" />
+          </div>
+          <h2 className="text-3xl font-bold uppercase">Test Complete</h2>
+          <div className="flex justify-center gap-8 font-mono font-bold text-lg">
+            <div className="brutal-card p-4 bg-ph-blue text-white">
+              <div className="text-4xl">{percentage}%</div>
+              <div className="text-sm mt-1">SCORE</div>
+            </div>
+            <div className="brutal-card p-4 bg-ph-green text-black">
+              <div className="text-4xl">{correctCount}/{totalGradable}</div>
+              <div className="text-sm mt-1">CORRECT</div>
+            </div>
+          </div>
+          {codingCount > 0 && (
+            <p className="font-mono text-sm opacity-70">{codingCount} coding question{codingCount !== 1 ? 's' : ''} require manual review.</p>
+          )}
         </div>
-        <h2 className="text-3xl font-bold uppercase">Test Submitted</h2>
-        <p className="font-mono font-bold opacity-70">
-          Your answers have been recorded. Thank you!
-        </p>
-        <button onClick={onExit} className="brutal-button bg-ph-dark text-ph-surface px-8 py-4 font-bold text-lg">EXIT</button>
+
+        <div className="brutal-card p-6 bg-ph-surface space-y-4">
+          <h3 className="text-xl font-bold uppercase border-b-2 border-ph-dark pb-2">Question Breakdown</h3>
+          {gradedResults.map((r, i) => (
+            <div key={r.id} className="flex items-start gap-3 py-2 border-b border-ph-dark/20 last:border-0">
+              <span className="font-mono font-bold text-sm w-8 shrink-0">Q{i + 1}</span>
+              <span className="font-mono text-xs px-2 py-0.5 brutal-border bg-ph-surface shrink-0 uppercase">
+                {r.type === 'multiple_choice' ? 'MC' : r.type === 'open_answer' ? 'OPEN' : 'CODE'}
+              </span>
+              <span className="flex-1 text-sm font-bold truncate">{r.body}</span>
+              {r.correct === null ? (
+                <span className="font-mono text-xs font-bold px-2 py-0.5 brutal-border bg-ph-yellow text-black shrink-0">MANUAL</span>
+              ) : r.correct ? (
+                <span className="font-mono text-xs font-bold px-2 py-0.5 brutal-border bg-ph-green text-black shrink-0">CORRECT</span>
+              ) : r.answered ? (
+                <span className="font-mono text-xs font-bold px-2 py-0.5 brutal-border bg-ph-red text-white shrink-0">WRONG</span>
+              ) : (
+                <span className="font-mono text-xs font-bold px-2 py-0.5 brutal-border bg-ph-dark/20 shrink-0">SKIPPED</span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="text-center">
+          <button onClick={onExit} className="brutal-button bg-ph-dark text-ph-surface px-8 py-4 font-bold text-lg">EXIT</button>
+        </div>
       </div>
     );
   }
@@ -1684,7 +1817,7 @@ function CodingQuestionView({ question, index, code, onChange, pyStatus, runCode
 
 // ─── Test Dashboard Card with Magic Link ─────────────────────────────────────
 
-function TestDashboardCard({ test, onSelect, onDelete }: { test: MockTest; onSelect: () => void; onDelete: (testId: string) => void }) {
+function TestDashboardCard({ test, onSelect, onDelete, adminFetch }: { test: MockTest; onSelect: () => void; onDelete: (testId: string) => void; adminFetch: AdminFetchFn }) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   return (
@@ -1732,6 +1865,7 @@ function TestDashboardCard({ test, onSelect, onDelete }: { test: MockTest; onSel
           testName={test.name}
           onClose={() => setShowDeleteModal(false)}
           onDeleted={() => onDelete(test.supabaseId!)}
+          adminFetch={adminFetch}
         />
       )}
     </>
@@ -1740,7 +1874,7 @@ function TestDashboardCard({ test, onSelect, onDelete }: { test: MockTest; onSel
 
 // ─── Delete Test Confirmation Modal ──────────────────────────────────────────
 
-function DeleteTestModal({ testId, testName, onClose, onDeleted }: { testId: string; testName: string; onClose: () => void; onDeleted: () => void }) {
+function DeleteTestModal({ testId, testName, onClose, onDeleted, adminFetch }: { testId: string; testName: string; onClose: () => void; onDeleted: () => void; adminFetch: AdminFetchFn }) {
   const [assignmentCount, setAssignmentCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -1748,7 +1882,7 @@ function DeleteTestModal({ testId, testName, onClose, onDeleted }: { testId: str
   useEffect(() => {
     async function fetchAssignments() {
       try {
-        const res = await fetch(`/api/tests/${testId}/assignments`);
+        const res = await adminFetch(`/api/tests/${testId}/assignments`);
         if (res.ok) {
           const data = await res.json();
           setAssignmentCount(data.length);
@@ -1761,12 +1895,12 @@ function DeleteTestModal({ testId, testName, onClose, onDeleted }: { testId: str
       setLoading(false);
     }
     fetchAssignments();
-  }, [testId]);
+  }, [testId, adminFetch]);
 
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const res = await fetch(`/api/tests/${testId}`, { method: 'DELETE' });
+      const res = await adminFetch(`/api/tests/${testId}`, { method: 'DELETE' });
       if (res.ok) {
         onDeleted();
         onClose();
@@ -1840,7 +1974,7 @@ interface AssignmentRecord {
   recipients: { email: string; name: string } | null;
 }
 
-function TestDetailView({ test, onBack }: { test: MockTest; onBack: () => void }) {
+function TestDetailView({ test, onBack, adminFetch }: { test: MockTest; onBack: () => void; adminFetch: AdminFetchFn }) {
   const [showModal, setShowModal] = useState(false);
   const [assignments, setAssignments] = useState<AssignmentRecord[]>([]);
   const [loadingAssignments, setLoadingAssignments] = useState(false);
@@ -1849,7 +1983,7 @@ function TestDetailView({ test, onBack }: { test: MockTest; onBack: () => void }
     if (!test.supabaseId) return;
     setLoadingAssignments(true);
     try {
-      const res = await fetch(`/api/tests/${test.supabaseId}/assignments`);
+      const res = await adminFetch(`/api/tests/${test.supabaseId}/assignments`);
       if (res.ok) {
         const data = await res.json();
         setAssignments(data);
@@ -1858,7 +1992,7 @@ function TestDetailView({ test, onBack }: { test: MockTest; onBack: () => void }
       console.error('Failed to fetch assignments:', err);
     }
     setLoadingAssignments(false);
-  }, [test.supabaseId]);
+  }, [test.supabaseId, adminFetch]);
 
   useEffect(() => {
     fetchAssignments();
@@ -1956,7 +2090,7 @@ function TestDetailView({ test, onBack }: { test: MockTest; onBack: () => void }
 
       {/* Generate Link Modal */}
       {showModal && test.supabaseId && (
-        <GenerateLinkModal testId={test.supabaseId} testName={test.name} onClose={handleModalDone} />
+        <GenerateLinkModal testId={test.supabaseId} testName={test.name} onClose={handleModalDone} adminFetch={adminFetch} />
       )}
     </div>
   );
@@ -1970,7 +2104,7 @@ interface GeneratedLink {
   assignment_id: string;
 }
 
-function GenerateLinkModal({ testId, testName, onClose }: { testId: string; testName: string; onClose: () => void }) {
+function GenerateLinkModal({ testId, testName, onClose, adminFetch }: { testId: string; testName: string; onClose: () => void; adminFetch: AdminFetchFn }) {
   const [phase, setPhase] = useState<'form' | 'results'>('form');
   const [emailsText, setEmailsText] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -1993,7 +2127,7 @@ function GenerateLinkModal({ testId, testName, onClose }: { testId: string; test
 
     for (const email of parsedEmails) {
       try {
-        const res = await fetch(`/api/tests/${testId}/generate-link`, {
+        const res = await adminFetch(`/api/tests/${testId}/generate-link`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2194,7 +2328,7 @@ interface StatsData {
   per_question_accuracy: Record<string, number>;
 }
 
-function AdminResultsDashboard({ tests }: { tests: MockTest[] }) {
+function AdminResultsDashboard({ tests, adminFetch }: { tests: MockTest[]; adminFetch: AdminFetchFn }) {
   const publishedTests = tests.filter(t => t.supabaseId);
   const [selectedTestId, setSelectedTestId] = useState<string>(publishedTests[0]?.supabaseId || '');
   const [attempts, setAttempts] = useState<AttemptData[]>([]);
@@ -2209,8 +2343,8 @@ function AdminResultsDashboard({ tests }: { tests: MockTest[] }) {
       setLoading(true);
       try {
         const [resultsRes, statsRes] = await Promise.all([
-          fetch(`/api/admin/results?testId=${selectedTestId}`),
-          fetch(`/api/admin/stats?testId=${selectedTestId}`),
+          adminFetch(`/api/admin/results?testId=${selectedTestId}`),
+          adminFetch(`/api/admin/stats?testId=${selectedTestId}`),
         ]);
         const resultsData = await resultsRes.json();
         const statsData = await statsRes.json();
@@ -2226,9 +2360,24 @@ function AdminResultsDashboard({ tests }: { tests: MockTest[] }) {
     fetchData();
   }, [selectedTestId]);
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!selectedTestId) return;
-    window.open(`/api/admin/export?testId=${selectedTestId}`, '_blank');
+    try {
+      const res = await adminFetch(`/api/admin/export?testId=${selectedTestId}`);
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="(.+)"/);
+      const filename = match ? match[1] : 'results.csv';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export:', err);
+    }
   };
 
   return (

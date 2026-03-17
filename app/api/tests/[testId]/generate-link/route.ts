@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAdmin } from '@/lib/auth';
 import crypto from 'crypto';
 
-// POST /api/tests/[testId]/generate-link — generate a magic link
+// POST /api/tests/[testId]/generate-link — generate a magic link (admin only)
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ testId: string }> }
 ) {
+  const { error: authError } = await requireAdmin(req);
+  if (authError) return authError;
+
   const { testId } = await params;
   const db = supabaseAdmin();
 

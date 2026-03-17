@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAdmin } from '@/lib/auth';
 
-// GET /api/tests/[testId]/assignments — list all assignments for a test
+// GET /api/tests/[testId]/assignments — list all assignments for a test (admin only)
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ testId: string }> }
 ) {
+  const { error: authError } = await requireAdmin(req);
+  if (authError) return authError;
+
   const { testId } = await params;
   const db = supabaseAdmin();
 

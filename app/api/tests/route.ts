@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAdmin } from '@/lib/auth';
 
-// GET /api/tests — list all tests
+// GET /api/tests — list all tests (open)
 export async function GET() {
   const db = supabaseAdmin();
   const { data, error } = await db
@@ -15,8 +16,11 @@ export async function GET() {
   return NextResponse.json(data);
 }
 
-// POST /api/tests — create a test (snapshot questions)
+// POST /api/tests — create a test (admin only)
 export async function POST(req: NextRequest) {
+  const { error: authError } = await requireAdmin(req);
+  if (authError) return authError;
+
   const body = await req.json();
   const { name, config_json, questions_json, duration_minutes, total_questions, pass_threshold, status } = body;
 

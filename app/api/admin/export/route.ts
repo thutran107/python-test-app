@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAdmin } from '@/lib/auth';
 
-// GET /api/admin/export?testId=X&format=csv
+// GET /api/admin/export?testId=X&format=csv (admin only)
 export async function GET(req: NextRequest) {
+  const { error: authError } = await requireAdmin(req);
+  if (authError) return authError;
+
   const testId = req.nextUrl.searchParams.get('testId');
 
   if (!testId) {
