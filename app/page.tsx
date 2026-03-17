@@ -72,7 +72,10 @@ export default function App() {
       .select('role')
       .eq('id', session.user.id)
       .single()
-      .then(({ data }) => setUserIsAdmin(data?.role === 'admin'));
+      .then(({ data, error }) => {
+        console.log('profiles query:', { userId: session.user.id, data, error });
+        setUserIsAdmin(data?.role === 'admin');
+      });
   }, [session?.user?.id]);
 
   const handleSignIn = async () => {
